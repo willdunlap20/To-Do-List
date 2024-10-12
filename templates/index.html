@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>To-Do List</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+        }
+        .task {
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Will's To-Do List</h1>
+
+    <!-- Input to add a new task -->
+    <input type="text" id="task-input" placeholder="Enter new task">
+    <button id="add-task-button">Add Task</button>
+
+    <h3>Tasks:</h3>
+    <div id="todo-list">Loading tasks...</div>
+
+    <script>
+        // Load tasks when the page is loaded
+        document.addEventListener("DOMContentLoaded", function() {
+            loadTasks();
+
+            // Add event listener to the "Add Task" button
+            document.getElementById("add-task-button").addEventListener("click", function() {
+                const taskInput = document.getElementById("task-input").value;
+                if (taskInput) {
+                    addTask(taskInput);
+                }
+            });
+        });
+
+        // Function to load all tasks from the server
+        function loadTasks() {
+            fetch('/todos')
+                .then(response => response.json())
+                .then(data => {
+                    const todoListDiv = document.getElementById('todo-list');
+                    todoListDiv.innerHTML = '';  // Clear the loading message or previous content
+                    if (data.length === 0) {
+                        todoListDiv.textContent = "No tasks available.";
+                    } else {
+                        data.forEach(todo => {
+                            const taskDiv = document.createElement('div');
+                            taskDiv.className = 'task';
+
+                            const checkbox = document.createElement('input');
+                            checkbox.type = 'checkbox';
+                            checkbox.checked = todo.completed;
+                            checkbox.addEventListener('change', () => {
+                                updateTask(todo.id, checkbox.checked);
+                            });
+
+                            const label = document.createElement('label');
+                            label.textContent = todo.task;
+
+                            taskDiv.appendChild(checkbox);
+                            taskDiv.appendChild(label);
+                            todoListDiv.appendChild(taskDiv);
+                        });
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching to-do list:', error);
+                    document.getElementById('todo-list').textContent = "Error loading tasks. Please try again later.";
+                });
+        }
+
+        // Function to add a new task to the server
+        function addTask(task) {
+            fetch('/todos', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ task: task })
+            })
+            .then(response => {
+                if (response.ok) {
+                    loadTasks();  // Reload tasks to show the new one
+                    document.getElementById("task-input").value = '';  // Clear input field
+                } else {
+                    console.error('Failed to add task');
+                }
+            })
+            .catch(error => {
+                console.error('Error adding task:', error);
+            });
+        }
+
+        // Function to update the status of a task
+        function updateTask(taskId, completed) {
+            fetch(`/todos/${taskId}`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ completed: completed })
+            })
+            .then(response => {
+                if (!response.ok) {
+                    console.error(`Failed to update task ${taskId}`);
+                }
+            })
+            .catch(error => {
+                console.error(`Error updating task ${taskId}:`, error);
+            });
+        }
+    </script>
+</body>
+</html>
