@@ -10,19 +10,41 @@
         }
         .task {
             margin: 10px 0;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .task-title {
+            font-weight: bold;
+        }
+        .priority {
+            font-size: 18px;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+        .task-container {
+            display: flex;
+            flex-direction: column;
         }
     </style>
 </head>
 <body>
     <h1>Will's To-Do List</h1>
 
-    <!-- Input to add a new task -->
-    <input type="text" id="task-input" placeholder="Enter new task">
+    <!-- Input to add a new task with title, notes, and priority -->
+    <input type="text" id="task-title" placeholder="Enter task title">
+    <textarea id="task-notes" placeholder="Enter task notes"></textarea>
+    <label for="task-priority">Priority (1-4):</label>
+    <input type="number" id="task-priority" min="1" max="4" value="1">
     <button id="add-task-button">Add Task</button>
 
     <h3>Tasks:</h3>
     <div id="todo-list">Loading tasks...</div>
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.14.0/Sortable.min.js"></script>
     <script>
         // Load tasks when the page is loaded
         document.addEventListener("DOMContentLoaded", function() {
@@ -30,9 +52,12 @@
 
             // Add event listener to the "Add Task" button
             document.getElementById("add-task-button").addEventListener("click", function() {
-                const taskInput = document.getElementById("task-input").value;
-                if (taskInput) {
-                    addTask(taskInput);
+                const taskTitle = document.getElementById("task-title").value;
+                const taskNotes = document.getElementById("task-notes").value;
+                const taskPriority = document.getElementById("task-priority").value;
+
+                if (taskTitle) {
+                    addTask(taskTitle, taskNotes, taskPriority);
                 }
             });
         });
@@ -43,13 +68,15 @@
                 .then(response => response.json())
                 .then(data => {
                     const todoListDiv = document.getElementById('todo-list');
-                    todoListDiv.innerHTML = '';  // Clear the loading message or previous content
+                    todoListDiv.innerHTML = '';  // Clear the loading message
+
                     if (data.length === 0) {
                         todoListDiv.textContent = "No tasks available.";
                     } else {
                         data.forEach(todo => {
                             const taskDiv = document.createElement('div');
                             taskDiv.className = 'task';
+                            taskDiv.setAttribute('data-id', todo.id);
 
                             const checkbox = document.createElement('input');
                             checkbox.type = 'checkbox';
@@ -58,34 +85,57 @@
                                 updateTask(todo.id, checkbox.checked);
                             });
 
-                            const label = document.createElement('label');
-                            label.textContent = todo.task;
+                            const title = document.createElement('span');
+                            title.className = 'task-title';
+                            title.textContent = todo.title;
+
+                            const notes = document.createElement('p');
+                            notes.textContent = todo.notes;
+
+                            const priority = document.createElement('span');
+                            priority.className = 'priority';
+                            priority.textContent = todo.priority;
+
+                            const deleteButton = document.createElement('button');
+                            deleteButton.textContent = 'X';
+                            deleteButton.addEventListener('click', () => {
+                                deleteTask(todo.id);
+                            });
+
+                            const taskContainer = document.createElement('div');
+                            taskContainer.className = 'task-container';
+                            taskContainer.appendChild(title);
+                            taskContainer.appendChild(notes);
 
                             taskDiv.appendChild(checkbox);
-                            taskDiv.appendChild(label);
+                            taskDiv.appendChild(taskContainer);
+                            taskDiv.appendChild(priority);
+                            taskDiv.appendChild(deleteButton);
                             todoListDiv.appendChild(taskDiv);
                         });
                     }
                 })
                 .catch(error => {
                     console.error('Error fetching to-do list:', error);
-                    document.getElementById('todo-list').textContent = "Error loading tasks. Please try again later.";
+                    document.getElementById('todo-list').textContent = "Error loading tasks.";
                 });
         }
 
         // Function to add a new task to the server
-        function addTask(task) {
+        function addTask(title, notes, priority) {
             fetch('/todos', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ task: task })
+                body: JSON.stringify({ title: title, notes: notes, priority: priority })
             })
             .then(response => {
                 if (response.ok) {
                     loadTasks();  // Reload tasks to show the new one
-                    document.getElementById("task-input").value = '';  // Clear input field
+                    document.getElementById("task-title").value = '';  // Clear inputs
+                    document.getElementById("task-notes").value = '';
+                    document.getElementById("task-priority").value = 1;
                 } else {
                     console.error('Failed to add task');
                 }
@@ -113,6 +163,47 @@
                 console.error(`Error updating task ${taskId}:`, error);
             });
         }
+
+        // Function to delete a task
+        function deleteTask(taskId) {
+            fetch(`/todos/${taskId}`, {
+                method: 'DELETE'
+            })
+            .then(response => {
+                if (response.ok) {
+                    loadTasks();  // Reload the list after deletion
+                } else {
+                    console.error(`Failed to delete task ${taskId}`);
+                }
+            })
+            .catch(error => {
+                console.error(`Error deleting task ${taskId}:`, error);
+            });
+        }
+
+        // Make tasks sortable (drag and drop)
+        const todoListDiv = document.getElementById('todo-list');
+        const sortable = new Sortable(todoListDiv, {
+            animation: 150,
+            onEnd: function(evt) {
+                const order = Array.from(todoListDiv.children).map(taskDiv => taskDiv.getAttribute('data-id'));
+                fetch('/update_task_order', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ order: order })
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        console.error('Failed to update task order');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error updating task order:', error);
+                });
+            }
+        });
     </script>
 </body>
 </html>
